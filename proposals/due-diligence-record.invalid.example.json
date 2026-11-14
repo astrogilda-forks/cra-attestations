@@ -1,0 +1,26 @@
+{
+  "record": "due-diligence-record",
+  "record_revision": "0.1",
+  "component": {
+    "purl": "pkg:github/example-org/libexample-parser"
+  },
+  "risk": {
+    "level": "high",
+    "note": "Parses untrusted network input in a privileged process."
+  },
+  "final_result": {
+    "outcome": "acceptable"
+  },
+  "properties_checked": [
+    {
+      "property": "Development practices",
+      "status": "not_met",
+      "evidence_url": "https://github.com/example-org/libexample-parser/actions",
+      "checked_on": "2026-10-01"
+    }
+  ],
+  "performed": {
+    "by": "Supply chain security team",
+    "at": "2026-10-01T09:30:00Z"
+  }
+}

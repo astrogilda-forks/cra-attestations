@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/orcwg/cra-attestations/main/proposals/due-diligence-record.schema.json",
+  "title": "Due diligence record for an integrated component",
+  "description": "A machine-readable form of the record that chapter 3 of the CRA due diligence white paper (orcwg/cra-due-diligence, 03.md) proposes a manufacturer keeps when it exercises Article 13(5) due diligence on a third-party component. One object per component version. The record holds no product information: one component can be integrated into many products, so each product keeps its own list of the records it relies on. The CRA does not enumerate fields for this record, so this schema is a proposal that follows that chapter's table, not a reading of the regulation. It uses the field names of proposals/template-lite.schema.json (pull request 37): a status with three values, an evidence_url, a free-text note, and digests with an algorithm and a value, so a due diligence record and an attestation read the same way. Its rules come from the chapter: a record identifies the component by its PURL with the exact version and states when the check was made, every component keeps a final result with its risk level and the reason for it, a component above low risk keeps one entry per property checked, and bulky evidence stays outside the record, named by digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record", "record_revision", "component", "risk", "final_result", "performed"],
+  "properties": {
+    "record": {
+      "description": "Which record this object is.",
+      "const": "due-diligence-record"
+    },
+    "record_revision": {
+      "description": "The revision of this schema the record was written against.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "component": { "$ref": "#/$defs/component" },
+    "risk": {
+      "description": "The level of due diligence applied and why. Recital 34 makes the appropriate level depend on the nature and level of cybersecurity risk of the component. The level is itself a finding, so its reason is always recorded, low risk included.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "note"],
+      "properties": {
+        "level": { "enum": ["low", "medium", "high"] },
+        "note": { "$ref": "#/$defs/note" }
+      }
+    },
+    "final_result": {
+      "description": "What the manufacturer decided about the component. The status of each property checked is what the decision rested on.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome"],
+      "properties": {
+        "outcome": { "enum": ["acceptable", "acceptable_with_actions", "not_acceptable"] },
+        "note": { "$ref": "#/$defs/note" }
+      }
+    },
+    "maintainer_metadata": {
+      "description": "Each maintainer-controlled field the manufacturer relied on, such as the security contact or the source repository, as read, with where and when. These values change upstream without a new release, so the record shows what the manufacturer relied on at the time of the check.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "value", "evidence_url", "read_on"],
+        "properties": {
+          "field": { "type": "string", "minLength": 1 },
+          "value": { "type": "string" },
+          "evidence_url": { "$ref": "#/$defs/evidence_url" },
+          "read_on": { "$ref": "#/$defs/date" }
+        }
+      }
+    },
+    "properties_checked": {
+      "description": "One short entry per property checked, from the properties chapter 1 of the white paper lists. A component at low risk may omit this list, and a component above low risk may not.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/property_entry" }
+    },
+    "performed": {
+      "description": "Who or what performed the check, the date and time it was performed, and the version of any tool used. What a check finds describes the project at that moment and can change afterwards, and two versions of a scanner give two answers about the same component.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by", "at"],
+      "properties": {
+        "by": { "type": "string", "minLength": 1 },
+        "at": { "type": "string", "format": "date-time" },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "version"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "version": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "Above low risk, each property checked is one entry. A record that omits them is indistinguishable from an assessment that skipped them.",
+      "if": {
+        "properties": { "risk": { "properties": { "level": { "enum": ["medium", "high"] } } } },
+        "required": ["risk"]
+      },
+      "then": { "required": ["properties_checked"] }
+    }
+  ],
+  "$defs": {
+    "status": {
+      "description": "The same three values as the lightweight template. met covers a property that holds and a lookup that returned nothing, which nothing_found tells apart; not_met is a property that failed; not_applicable is one the manufacturer judged not to apply.",
+      "enum": ["met", "not_met", "not_applicable"]
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "evidence_url": {
+      "description": "A location a reader consults without asking the manufacturer for anything.",
+      "type": "string",
+      "format": "uri"
+    },
+    "note": {
+      "description": "Free text the manufacturer wants a reader to have. Never a substitute for evidence_url or a digest where the entry requires one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "digest": {
+      "description": "A cryptographic digest naming a file kept outside the record. The same shape as artifact_digests in the lightweight template.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "enum": ["sha256", "sha384", "sha512", "sha3-256"] },
+        "value": { "type": "string", "pattern": "^[0-9a-f]{64,128}$" },
+        "describes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "component": {
+      "description": "The component, identified by its Package URL (PURL, https://github.com/package-url/purl-spec) and nothing else. The PURL carries the exact version, because a version range such as 2.x covers many releases and cannot be re-checked against the one that shipped. Where an artefact digest is wanted, the PURL's checksum qualifier carries it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purl"],
+      "properties": {
+        "purl": {
+          "description": "A PURL with a version, for example pkg:github/example-org/libexample-parser@2.4.1.",
+          "type": "string",
+          "pattern": "^pkg:[A-Za-z][A-Za-z0-9.+-]*/[^@?#]+@[^?#]+([?#].*)?$"
+        }
+      }
+    },
+    "property_entry": {
+      "description": "The result of one property checked. A check that found nothing is an entry with nothing_found, and an omission is not distinguishable from a check that never ran.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["property", "status", "checked_on"],
+      "properties": {
+        "property": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/status" },
+        "nothing_found": {
+          "description": "True where the check was a lookup, such as a search of a vulnerability database, that returned nothing. Only a met entry can carry it.",
+          "const": true
+        },
+        "evidence_url": {
+          "description": "The source read. A result read from a public source can be looked up again, so the entry is its own evidence.",
+          "$ref": "#/$defs/evidence_url"
+        },
+        "checked_on": { "$ref": "#/$defs/date" },
+        "test_run": {
+          "description": "Set for an additional security test the manufacturer ran, whose result only the party running it observed. The inputs are recorded so someone else can repeat the test against the component version the record names.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inputs"],
+          "properties": {
+            "inputs": { "type": "string", "minLength": 1 }
+          }
+        },
+        "evidence_digest": { "$ref": "#/$defs/digest" },
+        "action_taken": {
+          "description": "What was done about a finding, which under Recital 34 includes informing the person or entity manufacturing or maintaining the component.",
+          "type": "string",
+          "minLength": 1
+        },
+        "note": { "$ref": "#/$defs/note" }
+      },
+      "allOf": [
+        {
+          "description": "A met entry names where it was read, or is a test the manufacturer ran.",
+          "if": { "properties": { "status": { "const": "met" } }, "required": ["status"] },
+          "then": { "anyOf": [{ "required": ["evidence_url"] }, { "required": ["test_run"] }] }
+        },
+        {
+          "description": "nothing_found belongs to a met lookup.",
+          "if": { "required": ["nothing_found"] },
+          "then": { "properties": { "status": { "const": "met" } } }
+        },
+        {
+          "description": "Bulky material is kept only where a lookup cannot reproduce it, and then named by digest: a property that failed, one judged not applicable, or a test the manufacturer ran.",
+          "if": {
+            "anyOf": [
+              { "properties": { "status": { "enum": ["not_met", "not_applicable"] } }, "required": ["status"] },
+              { "required": ["test_run"] }
+            ]
+          },
+          "then": { "required": ["evidence_digest"] }
+        },
+        {
+          "description": "A property that failed records what was done about it.",
+          "if": { "properties": { "status": { "const": "not_met" } }, "required": ["status"] },
+          "then": { "required": ["action_taken"] }
+        },
+        {
+          "description": "A property judged not applicable says why.",
+          "if": { "properties": { "status": { "const": "not_applicable" } }, "required": ["status"] },
+          "then": { "required": ["note"] }
+        }
+      ]
+    }
+  }
+}
